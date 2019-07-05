@@ -1,6 +1,12 @@
 # climate_group
 
-Home Assistant Climate Groupe
+Home Assistant Climate Group
+
+Groups multiple climate devices to a single entity. Useful if you have for instance multiple radiator thermostats in a room and want to control them all together.
+Inspired/copied from light_group component (https://github.com/home-assistant/home-assistant/blob/dev/homeassistant/components/group/light.py)
+
+## Known short-comings:
+- only supports Celsius
 
 ## How to install:
 
