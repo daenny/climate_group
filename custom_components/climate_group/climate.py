@@ -168,7 +168,7 @@ class ClimateGroup(ClimateDevice):
         self._min_temp = _reduce_attribute(states, 'min_temp', reduce=max)
         self._max_temp = _reduce_attribute(states, 'max_temp', reduce=min)
         self._mode = None
-        all_modes = list(_find_state_attributes(states, ATTR_HVAC_MODE))
+        all_modes = [state.state for state in states]
         if all_modes:
             # Report the most common effect.
             modes_count = Counter(itertools.chain(all_modes))
