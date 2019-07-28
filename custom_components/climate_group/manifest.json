@@ -4,5 +4,6 @@
   "documentation": "https://github.com/daenny/climate_group",
   "dependencies": [],
   "codeowners": ["@daenny"],
-  "requirements": []
+  "requirements": [],
+  "homeassistant": "0.96.0"
 }
