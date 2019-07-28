@@ -19,7 +19,9 @@ from homeassistant.const import (STATE_UNKNOWN, ATTR_ENTITY_ID, ATTR_TEMPERATURE
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
-from homeassistant.components.climate.const import (SUPPORT_TARGET_TEMPERATURE, SUPPORT_OPERATION_MODE)
+from homeassistant.components.climate.const import (
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, ATTR_HVAC_MODE, HVAC_MODE_HEAT, PRESET_ECO, PRESET_COMFORT,
+    SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +33,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN)
 })
 
-SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE | SUPPORT_OPERATION_MODE
+SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE
 
 
 async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
@@ -95,28 +97,37 @@ class ClimateGroup(ClimateDevice):
         return self._supported_features
 
     @property
-    def current_operation(self):
-       return self._mode
-       
+    def hvac_mode(self):
+        return self._mode
+
     @property
-    def operation_list(self):
-       return self._mode_list
+    def hvac_action(self):
+        """Return the current running hvac operation if supported.
+        Need to be one of CURRENT_HVAC_*.
+        """
+        if self._mode == HVAC_MODE_OFF:
+            return CURRENT_HVAC_OFF
+        return CURRENT_HVAC_HEAT
+   
+    @property
+    def hvac_modes(self):
+        return self._mode_list
 
     @property
     def min_temp(self):
-       return self._min_temp
+        return self._min_temp
 
     @property
     def max_temp(self):
-       return self._max_temp
+        return self._max_temp
 
     @property
     def current_temperature(self):
-       return self._current_temp
+        return self._current_temp
 
     @property
     def target_temperature(self):
-       return self._target_temp
+        return self._target_temp
 
     @property
     def temperature_unit(self):
@@ -131,21 +142,22 @@ class ClimateGroup(ClimateDevice):
     async def async_set_temperature(self, **kwargs):
         """Forward the turn_on command to all lights in the light group."""
         data = {ATTR_ENTITY_ID: self._entity_ids}
-
-        temperature = kwargs.get(ATTR_TEMPERATURE)
-        if temperature is None:
-            return None
-        data[ATTR_TEMPERATURE] = temperature
-        await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
+        if ATTR_HVAC_MODE in kwargs:
+            hvac_mode = kwargs.get(ATTR_HVAC_MODE)
+            await self.async_set_hvac_mode(hvac_mode)
+        elif ATTR_TEMPERATURE in kwargs:
+            temperature = kwargs.get(ATTR_TEMPERATURE)
+            data[ATTR_TEMPERATURE] = temperature
+            await self.hass.services.async_call(
+                climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
 
     async def async_set_operation_mode(self, operation_mode):
         """Forward the turn_on command to all lights in the light group."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
-                'operation_mode': operation_mode}
+                ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_OPERATION_MODE, data, blocking=True)
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
 
     async def async_update(self):
         """Query all members and determine the light group state."""
@@ -156,14 +168,14 @@ class ClimateGroup(ClimateDevice):
         self._min_temp = _reduce_attribute(states, 'min_temp', reduce=max)
         self._max_temp = _reduce_attribute(states, 'max_temp', reduce=min)
         self._mode = None
-        all_modes = list(_find_state_attributes(states, 'operation_mode'))
+        all_modes = list(_find_state_attributes(states, ATTR_HVAC_MODE))
         if all_modes:
             # Report the most common effect.
             modes_count = Counter(itertools.chain(all_modes))
             self._mode = modes_count.most_common(1)[0][0]
         self._mode_list = None
         all_mode_lists = list(
-            _find_state_attributes(states, 'operation_list'))
+            _find_state_attributes(states, 'hvac_modes'))
         if all_mode_lists:
             # Merge all effects from all effect_lists with a union merge.
             self._mode_list = list(set().union(*all_mode_lists))
