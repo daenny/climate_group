@@ -20,7 +20,7 @@ from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import (
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, ATTR_HVAC_MODE, HVAC_MODE_HEAT, PRESET_ECO, PRESET_COMFORT,
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_AUTO,ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_AUTO, PRESET_ECO, PRESET_COMFORT,
     SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
