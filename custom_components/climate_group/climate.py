@@ -23,8 +23,9 @@ from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import (
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_HEAT_COOL, HVAC_MODE_AUTO, HVAC_MODE_FAN_ONLY, PRESET_ECO, PRESET_COMFORT,
-    SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, 
+    ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_HEAT_COOL, HVAC_MODE_AUTO,
+    HVAC_MODE_FAN_ONLY, PRESET_ECO, PRESET_COMFORT, SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
@@ -162,7 +163,7 @@ class ClimateGroup(ClimateDevice):
                 climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
 
     async def async_set_operation_mode(self, operation_mode):
-        """Forward the turn_on command to all climate in the climate group. LEGACY CALL"""
+        """Forward the turn_on command to all climate in the climate group. LEGACY CALL. This will be used only if the hass version is old."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
                 ATTR_HVAC_MODE: operation_mode}
 
