@@ -23,7 +23,7 @@ from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import (
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_IDLE, PRESET_ECO, PRESET_COMFORT,
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_HEAT_COOL, HVAC_MODE_AUTO, HVAC_MODE_FAN_ONLY, PRESET_ECO, PRESET_COMFORT,
     SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
@@ -116,7 +116,7 @@ class ClimateGroup(ClimateDevice):
             return CURRENT_HVAC_COOL
         elif self._mode == CURRENT_HVAC_DRY:
             return CURRENT_HVAC_DRY 
-        elif self._mode == CURRENT_HVAC_IDLE
+        elif self._mode == CURRENT_HVAC_IDLE:
             return CURRENT_HVAC_IDLE
         
     @property
@@ -169,7 +169,7 @@ class ClimateGroup(ClimateDevice):
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
         
-     async def async_set_hvac_mode(self, hvac_mode):
+    async def async_set_hvac_mode(self, hvac_mode):
         """Forward the turn_on command to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
                 ATTR_HVAC_MODE: hvac_mode}
