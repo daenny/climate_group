@@ -107,11 +107,11 @@ class ClimateGroup(ClimateDevice):
         """
         if self._mode == HVAC_MODE_OFF:
             return CURRENT_HVAC_OFF
-        else if self._mode == HVAC_MODE_HEAT:
+        elif self._mode == HVAC_MODE_HEAT:
             return CURRENT_HVAC_HEAT
-        else if self._mode == CURRENT_HVAC_COOL:
+        elif self._mode == CURRENT_HVAC_COOL:
             return CURRENT_HVAC_COOL
-        else if self._mode == CURRENT_HVAC_AUTO:
+        elif self._mode == CURRENT_HVAC_AUTO:
             return CURRENT_HVAC_AUTO 
         return CURRENT_HVAC_HEAT
     @property
