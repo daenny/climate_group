@@ -3,6 +3,9 @@ This platform allows several climate devices to be grouped into one climate devi
 
 For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/climate.group/
+
+For more details on climate component, please refer to the documentation at
+https://developers.home-assistant.io/docs/en/entity_climate.html
 """
 import logging
 import itertools
@@ -20,7 +23,7 @@ from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import (
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY,ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, PRESET_ECO, PRESET_COMFORT,
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_IDLE, PRESET_ECO, PRESET_COMFORT,
     SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
@@ -113,7 +116,9 @@ class ClimateGroup(ClimateDevice):
             return CURRENT_HVAC_COOL
         elif self._mode == CURRENT_HVAC_DRY:
             return CURRENT_HVAC_DRY 
-        return CURRENT_HVAC_HEAT
+        elif self._mode == CURRENT_HVAC_IDLE
+            return CURRENT_HVAC_IDLE
+        
     @property
     def hvac_modes(self):
         return self._mode_list
@@ -157,13 +162,21 @@ class ClimateGroup(ClimateDevice):
                 climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
 
     async def async_set_operation_mode(self, operation_mode):
-        """Forward the turn_on command to all climate in the climate group."""
+        """Forward the turn_on command to all climate in the climate group. LEGACY CALL"""
         data = {ATTR_ENTITY_ID: self._entity_ids,
                 ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
         
+     async def async_set_hvac_mode(self, hvac_mode):
+        """Forward the turn_on command to all climate in the climate group."""
+        data = {ATTR_ENTITY_ID: self._entity_ids,
+                ATTR_HVAC_MODE: hvac_mode}
+
+        await self.hass.services.async_call(
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)    
+    
     async def async_update(self):
         """Query all members and determine the climate group state."""
         all_states = [self.hass.states.get(x) for x in self._entity_ids]
