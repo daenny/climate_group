@@ -162,7 +162,7 @@ class ClimateGroup(ClimateDevice):
     async def async_set_hvac_mode(self, operation_mode):
         """Forward the turn_on command to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_HVAC_MODE: hvac_mode}
+                ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
