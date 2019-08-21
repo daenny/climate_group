@@ -107,8 +107,13 @@ class ClimateGroup(ClimateDevice):
         """
         if self._mode == HVAC_MODE_OFF:
             return CURRENT_HVAC_OFF
+        else if self._mode == HVAC_MODE_HEAT:
+            return CURRENT_HVAC_HEAT
+        else if self._mode == CURRENT_HVAC_COOL:
+            return CURRENT_HVAC_COOL
+        else if self._mode == CURRENT_HVAC_AUTO:
+            return CURRENT_HVAC_AUTO 
         return CURRENT_HVAC_HEAT
-   
     @property
     def hvac_modes(self):
         return self._mode_list
@@ -152,14 +157,6 @@ class ClimateGroup(ClimateDevice):
                 climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
 
     async def async_set_operation_mode(self, operation_mode):
-        """Forward the turn_on command to all climate in the climate group."""
-        data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_HVAC_MODE: operation_mode}
-
-        await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
-
-    async def async_set_hvac_mode(self, operation_mode):
         """Forward the turn_on command to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
                 ATTR_HVAC_MODE: operation_mode}
