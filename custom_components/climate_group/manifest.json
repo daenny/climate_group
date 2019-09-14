@@ -3,7 +3,7 @@
   "name": "Climate Group",
   "documentation": "https://github.com/daenny/climate_group",
   "dependencies": [],
-  "codeowners": ["@daenny"],
+  "codeowners": ["@daenny", "@b4dpxl"],
   "requirements": [],
   "homeassistant": "0.96.0"
 }
