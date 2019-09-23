@@ -3,6 +3,9 @@ This platform allows several climate devices to be grouped into one climate devi
 
 For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/climate.group/
+
+For more details on climate component, please refer to the documentation at
+https://developers.home-assistant.io/docs/en/entity_climate.html
 """
 import logging
 import itertools
@@ -20,8 +23,9 @@ from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import (
-    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, ATTR_HVAC_MODE, HVAC_MODE_HEAT, PRESET_ECO, PRESET_COMFORT,
-    SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
+    CURRENT_HVAC_HEAT, CURRENT_HVAC_OFF, CURRENT_HVAC_COOL, CURRENT_HVAC_DRY, CURRENT_HVAC_IDLE, 
+    ATTR_HVAC_MODE, HVAC_MODE_HEAT, HVAC_MODE_COOL, HVAC_MODE_DRY, HVAC_MODE_HEAT_COOL, HVAC_MODE_AUTO,
+    HVAC_MODE_FAN_ONLY, PRESET_ECO, PRESET_COMFORT, SUPPORT_TARGET_TEMPERATURE, HVAC_MODE_OFF, SUPPORT_PRESET_MODE)
 import homeassistant.helpers.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,10 +49,10 @@ async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
 
 
 class ClimateGroup(ClimateDevice):
-    """Representation of a light group."""
+    """Representation of a climate group."""
 
     def __init__(self, name: str, entity_ids: List[str]) -> None:
-        """Initialize a light group."""
+        """Initialize a climate group."""
         self._name = name  # type: str
         self._entity_ids = entity_ids  # type: List[str]
 
@@ -88,7 +92,7 @@ class ClimateGroup(ClimateDevice):
 
     @property
     def available(self) -> bool:
-        """Return whether the light group is available."""
+        """Return whether the climate group is available."""
         return self._available
 
     @property
@@ -107,8 +111,15 @@ class ClimateGroup(ClimateDevice):
         """
         if self._mode == HVAC_MODE_OFF:
             return CURRENT_HVAC_OFF
-        return CURRENT_HVAC_HEAT
-   
+        elif self._mode == HVAC_MODE_HEAT:
+            return CURRENT_HVAC_HEAT
+        elif self._mode == CURRENT_HVAC_COOL:
+            return CURRENT_HVAC_COOL
+        elif self._mode == CURRENT_HVAC_DRY:
+            return CURRENT_HVAC_DRY 
+        elif self._mode == CURRENT_HVAC_IDLE:
+            return CURRENT_HVAC_IDLE
+        
     @property
     def hvac_modes(self):
         return self._mode_list
@@ -136,11 +147,11 @@ class ClimateGroup(ClimateDevice):
 
     @property
     def should_poll(self) -> bool:
-        """No polling needed for a light group."""
+        """No polling needed for a climate group."""
         return False
 
     async def async_set_temperature(self, **kwargs):
-        """Forward the turn_on command to all lights in the light group."""
+        """Forward the turn_on command to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids}
         if ATTR_HVAC_MODE in kwargs:
             hvac_mode = kwargs.get(ATTR_HVAC_MODE)
@@ -152,15 +163,23 @@ class ClimateGroup(ClimateDevice):
                 climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
 
     async def async_set_operation_mode(self, operation_mode):
-        """Forward the turn_on command to all lights in the light group."""
+        """Forward the turn_on command to all climate in the climate group. LEGACY CALL. This will be used only if the hass version is old."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
                 ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
+        
+    async def async_set_hvac_mode(self, hvac_mode):
+        """Forward the turn_on command to all climate in the climate group."""
+        data = {ATTR_ENTITY_ID: self._entity_ids,
+                ATTR_HVAC_MODE: hvac_mode}
 
+        await self.hass.services.async_call(
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)    
+    
     async def async_update(self):
-        """Query all members and determine the light group state."""
+        """Query all members and determine the climate group state."""
         all_states = [self.hass.states.get(x) for x in self._entity_ids]
         states = list(filter(None, all_states))
         self._target_temp = _reduce_attribute(states, 'temperature')
@@ -185,7 +204,7 @@ class ClimateGroup(ClimateDevice):
             # Merge supported features by emulating support for every feature
             # we find.
             self._supported_features |= support
-        # Bitwise-and the supported features with the GroupedLight's features
+        # Bitwise-and the supported features with the GroupedClimate's features
         # so that we don't break in the future when a new feature is added.
         self._supported_features &= SUPPORT_FLAGS
 
