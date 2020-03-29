@@ -7,31 +7,44 @@ https://home-assistant.io/components/climate.group/
 For more details on climate component, please refer to the documentation at
 https://developers.home-assistant.io/docs/en/entity_climate.html
 """
-import logging
 import itertools
-from typing import List, Tuple, Optional, Iterator, Any, Callable
+import logging
 from collections import Counter
+from typing import List, Optional, Iterator, Any, Callable
 
 import voluptuous as vol
 
-from homeassistant.core import State, callback
+import homeassistant.helpers.config_validation as cv
 from homeassistant.components import climate
-from homeassistant.const import (STATE_UNKNOWN, ATTR_ENTITY_ID, ATTR_TEMPERATURE, TEMP_CELSIUS,
-                                 CONF_ENTITIES, CONF_NAME, STATE_UNAVAILABLE,
-                                 ATTR_SUPPORTED_FEATURES)
-from homeassistant.helpers.event import async_track_state_change
-from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import *
-import homeassistant.helpers.config_validation as cv
+from homeassistant.const import (ATTR_ENTITY_ID, ATTR_TEMPERATURE, TEMP_CELSIUS,
+                                 CONF_ENTITIES, CONF_NAME, ATTR_SUPPORTED_FEATURES)
+from homeassistant.core import State, callback
+from homeassistant.helpers.event import async_track_state_change
+from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_NAME = 'Climate Group'
 
+CONF_EXCLUDE = 'exclude'
+
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-    vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN)
+    vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
+    vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
+        cv.ensure_list,
+        [vol.In([
+            PRESET_ACTIVITY,
+            PRESET_AWAY,
+            PRESET_BOOST,
+            PRESET_COMFORT,
+            PRESET_ECO,
+            PRESET_HOME,
+            PRESET_SLEEP
+        ])
+    ])
 })
 
 SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE
@@ -41,14 +54,17 @@ async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
                                async_add_entities,
                                discovery_info=None) -> None:
     """Initialize climate.group platform."""
-    async_add_entities([ClimateGroup(config.get(CONF_NAME),
-                                   config[CONF_ENTITIES])])
+    async_add_entities([ClimateGroup(
+        config.get(CONF_NAME),
+        config[CONF_ENTITIES],
+        config.get(CONF_EXCLUDE)
+    )])
 
 
 class ClimateGroup(ClimateDevice):
     """Representation of a climate group."""
 
-    def __init__(self, name: str, entity_ids: List[str]) -> None:
+    def __init__(self, name: str, entity_ids: List[str], excluded: List[str]) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
         self._entity_ids = entity_ids  # type: List[str]
@@ -66,6 +82,8 @@ class ClimateGroup(ClimateDevice):
         self._async_unsub_state_changed = None
         self._is_away = False
         self._preset_modes = None
+        self._preset = None
+        self._excluded = excluded
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -102,12 +120,14 @@ class ClimateGroup(ClimateDevice):
 
     @property
     def hvac_mode(self):
+        """What is the thermostat intending to do"""
         return self._mode
 
     @property
     def hvac_action(self):
+        """What is the thermostat _actually_ doing right now"""
         return self._action
-        
+
     @property
     def hvac_modes(self):
         return self._mode_list
@@ -158,13 +178,14 @@ class ClimateGroup(ClimateDevice):
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
-        
+
     @property
     def preset_mode(self):
         """Return the current preset mode, e.g., home, away, temp."""
-        if self._is_away:
-            return PRESET_AWAY
-        return None
+        # if self._is_away:
+        #     return PRESET_AWAY
+        # return None
+        return self._preset
 
     @property
     def preset_modes(self):
@@ -177,8 +198,8 @@ class ClimateGroup(ClimateDevice):
                 ATTR_HVAC_MODE: hvac_mode}
 
         await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)    
-    
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
+
     async def async_update(self):
         """Query all members and determine the climate group state."""
         raw_states = [self.hass.states.get(x) for x in self._entity_ids]
@@ -193,26 +214,43 @@ class ClimateGroup(ClimateDevice):
         cool_actions = list(filter(lambda x: x.attributes['hvac_action'] == CURRENT_HVAC_COOL, states))
         idle_actions = list(filter(lambda x: x.attributes['hvac_action'] == CURRENT_HVAC_IDLE, states))
 
-        preset_away_stats = list(filter(lambda x: x.attributes['preset_mode'] == PRESET_AWAY, states))
-        preset_none_stats = list(filter(lambda x: x.attributes['preset_mode'] != PRESET_AWAY, states))
-        self._is_away = len(preset_away_stats) == len(states)
+        all_presets = [state.attributes['preset_mode'] for state in states]
+        if all_presets:
+            # Report the most common preset_mode.
+            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
 
-        if self._is_away:
-            self._target_temp = _reduce_attribute(preset_away_stats, 'temperature')
-            self._current_temp = _reduce_attribute(preset_away_stats, 'current_temperature')
+        non_excluded_states = list(filter(
+            lambda x: x.attributes['preset_mode'] not in self._excluded, states
+        )) if self._excluded else []
+
+        _LOGGER.debug(self._excluded)
+        _LOGGER.debug(non_excluded_states)
+
+        if not non_excluded_states or len(non_excluded_states) == len(all_states):
+            # exclusion disabled or everything is in an "excluded" state
+            if non_excluded_states: _LOGGER.debug("All entities in an non-excluded state")
+            self._target_temp = _reduce_attribute(all_states, 'temperature')
+            self._current_temp = _reduce_attribute(all_states, 'current_temperature')
+
         else:
-            self._target_temp = _reduce_attribute(preset_none_stats, 'temperature')
-            self._current_temp = _reduce_attribute(preset_none_stats, 'current_temperature')
+            _LOGGER.debug("Using only non-excluded entities")
+            self._target_temp = _reduce_attribute(non_excluded_states, 'temperature')
+            self._current_temp = _reduce_attribute(non_excluded_states, 'current_temperature')
+
+        _LOGGER.debug("Temps: " + str(self._target_temp) + " - " + str(self._current_temp))
 
         self._min_temp = _reduce_attribute(all_states, 'min_temp', reduce=max)
         self._max_temp = _reduce_attribute(all_states, 'max_temp', reduce=min)
 
-        self._mode = CURRENT_HVAC_OFF
+        # return the Mode (what the thermostat is set to do) in priority order (heat, then cool, then off)
+        self._mode = HVAC_MODE_OFF
         if len(heat_states):
             self._mode = HVAC_MODE_HEAT
         elif len(cool_states):
             self._mode = HVAC_MODE_COOL
 
+        # return what the thermostat is _actually_ doing. If _any_ are actively
+        # heating or cooling, this is reported
         self._action = CURRENT_HVAC_OFF
         if len(heat_actions):
             self._action = CURRENT_HVAC_HEAT
