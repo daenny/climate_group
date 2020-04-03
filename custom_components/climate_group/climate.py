@@ -76,11 +76,9 @@ class ClimateGroup(ClimateDevice):
         self._mode = None
         self._action = None
         self._mode_list = None
-        self._is_on = False  # type: bool
         self._available = True  # type: bool
         self._supported_features = 0  # type: int
         self._async_unsub_state_changed = None
-        self._is_away = False
         self._preset_modes = None
         self._preset = None
         self._excluded = excluded
@@ -182,9 +180,6 @@ class ClimateGroup(ClimateDevice):
     @property
     def preset_mode(self):
         """Return the current preset mode, e.g., home, away, temp."""
-        # if self._is_away:
-        #     return PRESET_AWAY
-        # return None
         return self._preset
 
     @property
@@ -208,39 +203,7 @@ class ClimateGroup(ClimateDevice):
         states = list(filter(lambda x: x is not None and 'preset_mode' in x.attributes, raw_states))
 
         heat_states = list(filter(lambda x: x.state == HVAC_MODE_HEAT, states))
-        cool_states = list(filter(lambda x: x.state == HVAC_MODE_HEAT, states))
-
-        heat_actions = list(filter(lambda x: x.attributes['hvac_action'] == CURRENT_HVAC_HEAT, states))
-        cool_actions = list(filter(lambda x: x.attributes['hvac_action'] == CURRENT_HVAC_COOL, states))
-        idle_actions = list(filter(lambda x: x.attributes['hvac_action'] == CURRENT_HVAC_IDLE, states))
-
-        all_presets = [state.attributes['preset_mode'] for state in states]
-        if all_presets:
-            # Report the most common preset_mode.
-            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
-
-        non_excluded_states = list(filter(
-            lambda x: x.attributes['preset_mode'] not in self._excluded, states
-        )) if self._excluded else []
-
-        _LOGGER.debug(self._excluded)
-        _LOGGER.debug(non_excluded_states)
-
-        if not non_excluded_states or len(non_excluded_states) == len(all_states):
-            # exclusion disabled or everything is in an "excluded" state
-            if non_excluded_states: _LOGGER.debug("All entities in an non-excluded state")
-            self._target_temp = _reduce_attribute(all_states, 'temperature')
-            self._current_temp = _reduce_attribute(all_states, 'current_temperature')
-
-        else:
-            _LOGGER.debug("Using only non-excluded entities")
-            self._target_temp = _reduce_attribute(non_excluded_states, 'temperature')
-            self._current_temp = _reduce_attribute(non_excluded_states, 'current_temperature')
-
-        _LOGGER.debug("Temps: " + str(self._target_temp) + " - " + str(self._current_temp))
-
-        self._min_temp = _reduce_attribute(all_states, 'min_temp', reduce=max)
-        self._max_temp = _reduce_attribute(all_states, 'max_temp', reduce=min)
+        cool_states = list(filter(lambda x: x.state == HVAC_MODE_COOL, states))
 
         # return the Mode (what the thermostat is set to do) in priority order (heat, then cool, then off)
         self._mode = HVAC_MODE_OFF
@@ -249,15 +212,42 @@ class ClimateGroup(ClimateDevice):
         elif len(cool_states):
             self._mode = HVAC_MODE_COOL
 
+        heat_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_HEAT, states))
+        cool_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_COOL, states))
+        idle_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_IDLE, states))
+        off_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_OFF, states))
         # return what the thermostat is _actually_ doing. If _any_ are actively
         # heating or cooling, this is reported
-        self._action = CURRENT_HVAC_OFF
-        if len(heat_actions):
+        self._action = None
+        if heat_actions:
             self._action = CURRENT_HVAC_HEAT
-        elif len(cool_actions):
+        elif cool_actions:
             self._action = CURRENT_HVAC_COOL
-        elif len(idle_actions):
+        elif idle_actions:
             self._action = CURRENT_HVAC_IDLE
+        elif off_actions:
+            self._action = CURRENT_HVAC_OFF
+
+        all_presets = [state.attributes.get('preset_mode', None) for state in states]
+        if all_presets:
+            # Report the most common preset_mode.
+            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+
+        # if nothing is in excluded everything will be in 'filtered states'
+        filtered_states = list(filter(
+            lambda x: x.attributes.get('preset_mode', None) not in self._excluded, states
+        ))
+
+        _LOGGER.error(f"Excluded by config: {self._excluded}")
+        _LOGGER.error(f"Resulting filtered states: {filtered_states}")
+        
+        self._target_temp = _reduce_attribute(filtered_states, 'temperature')
+        self._current_temp = _reduce_attribute(filtered_states, 'current_temperature')
+
+        _LOGGER.error(f"Target temp: {self._target_temp}; Current temp: {self._current_temp}")
+
+        self._min_temp = _reduce_attribute(all_states, 'min_temp', reduce=max)
+        self._max_temp = _reduce_attribute(all_states, 'max_temp', reduce=min)
 
         self._mode_list = None
         all_mode_lists = list(
@@ -282,11 +272,9 @@ class ClimateGroup(ClimateDevice):
             self._preset_modes = None
 
     async def async_set_preset_mode(self, preset_mode: str):
-        self._is_away = preset_mode == PRESET_AWAY
-
         """Forward the preset_mode to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_PRESET_MODE: PRESET_AWAY if self._is_away else PRESET_NONE}
+                ATTR_PRESET_MODE: preset_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True)
@@ -322,3 +310,4 @@ def _reduce_attribute(states: List[State],
         return attrs[0]
 
     return reduce(*attrs)
+
