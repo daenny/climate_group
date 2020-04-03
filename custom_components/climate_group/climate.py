@@ -238,13 +238,13 @@ class ClimateGroup(ClimateDevice):
             lambda x: x.attributes.get('preset_mode', None) not in self._excluded, states
         ))
 
-        _LOGGER.error(f"Excluded by config: {self._excluded}")
-        _LOGGER.error(f"Resulting filtered states: {filtered_states}")
+        _LOGGER.debug(f"Excluded by config: {self._excluded}")
+        _LOGGER.debug(f"Resulting filtered states: {filtered_states}")
         
         self._target_temp = _reduce_attribute(filtered_states, 'temperature')
         self._current_temp = _reduce_attribute(filtered_states, 'current_temperature')
 
-        _LOGGER.error(f"Target temp: {self._target_temp}; Current temp: {self._current_temp}")
+        _LOGGER.debug(f"Target temp: {self._target_temp}; Current temp: {self._current_temp}")
 
         self._min_temp = _reduce_attribute(all_states, 'min_temp', reduce=max)
         self._max_temp = _reduce_attribute(all_states, 'max_temp', reduce=min)
