@@ -19,6 +19,7 @@ from homeassistant.components import climate
 from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
 from homeassistant.components.climate.const import *
 from homeassistant.const import (ATTR_ENTITY_ID, ATTR_TEMPERATURE, TEMP_CELSIUS,
+                                 TEMP_FAHRENHEIT, CONF_TEMPERATURE_UNIT,
                                  CONF_ENTITIES, CONF_NAME, ATTR_SUPPORTED_FEATURES)
 from homeassistant.core import State, callback
 from homeassistant.helpers.event import async_track_state_change
@@ -32,6 +33,7 @@ CONF_EXCLUDE = 'exclude'
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+    vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
     vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
     vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
         cv.ensure_list,
@@ -50,6 +52,18 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE
 
 
+# HVAC Action priority
+HVAC_ACTIONS = [
+    CURRENT_HVAC_HEAT,
+    CURRENT_HVAC_COOL,
+    CURRENT_HVAC_DRY,
+    CURRENT_HVAC_FAN,
+    CURRENT_HVAC_IDLE,
+    CURRENT_HVAC_OFF,
+    None
+    ]
+
+
 async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
                                async_add_entities,
                                discovery_info=None) -> None:
@@ -57,18 +71,22 @@ async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
     async_add_entities([ClimateGroup(
         config.get(CONF_NAME),
         config[CONF_ENTITIES],
-        config.get(CONF_EXCLUDE)
+        config.get(CONF_EXCLUDE),
+        config.get(CONF_TEMPERATURE_UNIT)
     )])
 
 
 class ClimateGroup(ClimateDevice):
     """Representation of a climate group."""
 
-    def __init__(self, name: str, entity_ids: List[str], excluded: List[str]) -> None:
+    def __init__(self, name: str, entity_ids: List[str], excluded: List[str], unit: str) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
         self._entity_ids = entity_ids  # type: List[str]
-
+        if "c" in unit.lower():
+            self._unit = TEMP_CELSIUS
+        else:
+            self._unit = TEMP_FAHRENHEIT
         self._min_temp = 0
         self._max_temp = 0
         self._current_temp = 0
@@ -149,7 +167,7 @@ class ClimateGroup(ClimateDevice):
     @property
     def temperature_unit(self):
         """Return the unit of measurement that is used."""
-        return TEMP_CELSIUS
+        return self._unit
 
     @property
     def should_poll(self) -> bool:
@@ -198,81 +216,72 @@ class ClimateGroup(ClimateDevice):
     async def async_update(self):
         """Query all members and determine the climate group state."""
         raw_states = [self.hass.states.get(x) for x in self._entity_ids]
-        all_states = list(filter(None, raw_states))
-
-        states = list(filter(lambda x: x is not None and 'preset_mode' in x.attributes, raw_states))
-
-        heat_states = list(filter(lambda x: x.state == HVAC_MODE_HEAT, states))
-        cool_states = list(filter(lambda x: x.state == HVAC_MODE_COOL, states))
-
-        # return the Mode (what the thermostat is set to do) in priority order (heat, then cool, then off)
-        self._mode = HVAC_MODE_OFF
-        if len(heat_states):
-            self._mode = HVAC_MODE_HEAT
-        elif len(cool_states):
-            self._mode = HVAC_MODE_COOL
-
-        heat_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_HEAT, states))
-        cool_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_COOL, states))
-        idle_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_IDLE, states))
-        off_actions = list(filter(lambda x: x.attributes.get('hvac_action', None) == CURRENT_HVAC_OFF, states))
-        # return what the thermostat is _actually_ doing. If _any_ are actively
-        # heating or cooling, this is reported
-        self._action = None
-        if heat_actions:
-            self._action = CURRENT_HVAC_HEAT
-        elif cool_actions:
-            self._action = CURRENT_HVAC_COOL
-        elif idle_actions:
-            self._action = CURRENT_HVAC_IDLE
-        elif off_actions:
-            self._action = CURRENT_HVAC_OFF
+        states = list(filter(None, raw_states))
 
         # if nothing is in excluded everything will be in 'filtered states'
         filtered_states = list(filter(
             lambda x: x.attributes.get('preset_mode', None) not in self._excluded, states
         ))
+
         if not filtered_states:  # everything is being filtered, so show everything
             filtered_states = states
 
         _LOGGER.debug(f"Excluded by config: {self._excluded}")
         _LOGGER.debug(f"Resulting filtered states: {filtered_states}")
 
-        # get the most common state of non-filtered devices
-        all_presets = [state.attributes.get('preset_mode', None) for state in filtered_states]
-        if all_presets:
-            # Report the most common preset_mode.
-            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+        all_modes = [x.state for x in filtered_states]
+        # return the Mode (what the thermostat is set to do) in priority order (heat, cool, ...)
+        self._mode = HVAC_MODE_OFF
+        # iterate through all hvac modes (skip first, as its off)
+        for hvac_mode in HVAC_MODES[1:]:
+            # if any thermostat is in the given mode return it
+            if any([mode == hvac_mode for mode in all_modes]):
+                self._mode = hvac_mode
+                break
 
-        self._target_temp = _reduce_attribute(filtered_states, 'temperature')
-        self._current_temp = _reduce_attribute(filtered_states, 'current_temperature')
+        all_actions = [state.attributes.get(ATTR_HVAC_ACTION, None) for state in filtered_states]
+        for hvac_action in HVAC_ACTIONS:
+            # if any thermostat is in the given action return it
+            if any([action == hvac_action for action in all_actions]):
+                self._action = hvac_action
+                break
+
+        # get the most common state of non-filtered devices
+        all_presets = [state.attributes.get(ATTR_PRESET_MODE, None) for state in filtered_states]
+        # Report the most common preset_mode.
+        self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+
+        self._target_temp = _reduce_attribute(filtered_states, ATTR_TEMPERATURE)
+        self._current_temp = _reduce_attribute(filtered_states, ATTR_CURRENT_TEMPERATURE)
 
         _LOGGER.debug(f"Target temp: {self._target_temp}; Current temp: {self._current_temp}")
 
-        self._min_temp = _reduce_attribute(all_states, 'min_temp', reduce=max)
-        self._max_temp = _reduce_attribute(all_states, 'max_temp', reduce=min)
+        self._min_temp = _reduce_attribute(states, ATTR_MIN_TEMP, reduce=max)
+        self._max_temp = _reduce_attribute(states, ATTR_MAX_TEMP, reduce=min)
 
+        # Supported HVAC modes
         self._mode_list = None
         all_mode_lists = list(
-            _find_state_attributes(states, 'hvac_modes'))
+            _find_state_attributes(states, ATTR_HVAC_MODES))
         if all_mode_lists:
             # Merge all effects from all effect_lists with a union merge.
             self._mode_list = list(set().union(*all_mode_lists))
 
         self._supported_features = 0
-        for support in _find_state_attributes(all_states, ATTR_SUPPORTED_FEATURES):
+        for support in _find_state_attributes(states, ATTR_SUPPORTED_FEATURES):
             # Merge supported features by emulating support for every feature
             # we find.
             self._supported_features |= support
 
         presets = []
-        for preset in _find_state_attributes(all_states, ATTR_PRESET_MODES):
+        for preset in _find_state_attributes(states, ATTR_PRESET_MODES):
             presets.extend(preset)
 
         if len(presets):
             self._preset_modes = set(presets)
         else:
             self._preset_modes = None
+            
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Forward the preset_mode to all climate in the climate group."""
