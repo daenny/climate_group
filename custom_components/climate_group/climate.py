@@ -228,19 +228,22 @@ class ClimateGroup(ClimateDevice):
         elif off_actions:
             self._action = CURRENT_HVAC_OFF
 
-        all_presets = [state.attributes.get('preset_mode', None) for state in states]
-        if all_presets:
-            # Report the most common preset_mode.
-            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
-
         # if nothing is in excluded everything will be in 'filtered states'
         filtered_states = list(filter(
             lambda x: x.attributes.get('preset_mode', None) not in self._excluded, states
         ))
+        if not filtered_states:  # everything is being filtered, so show everything
+            filtered_states = states
 
         _LOGGER.debug(f"Excluded by config: {self._excluded}")
         _LOGGER.debug(f"Resulting filtered states: {filtered_states}")
-        
+
+        # get the most common state of non-filtered devices
+        all_presets = [state.attributes.get('preset_mode', None) for state in filtered_states]
+        if all_presets:
+            # Report the most common preset_mode.
+            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+
         self._target_temp = _reduce_attribute(filtered_states, 'temperature')
         self._current_temp = _reduce_attribute(filtered_states, 'current_temperature')
 
