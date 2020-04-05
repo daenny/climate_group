@@ -16,38 +16,51 @@ import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components import climate
-from homeassistant.components.climate import (ClimateDevice, PLATFORM_SCHEMA)
+from homeassistant.components.climate import ClimateDevice, PLATFORM_SCHEMA
 from homeassistant.components.climate.const import *
-from homeassistant.const import (ATTR_ENTITY_ID, ATTR_TEMPERATURE, TEMP_CELSIUS,
-                                 TEMP_FAHRENHEIT, CONF_TEMPERATURE_UNIT,
-                                 CONF_ENTITIES, CONF_NAME, ATTR_SUPPORTED_FEATURES)
+from homeassistant.const import (
+    ATTR_ENTITY_ID,
+    ATTR_TEMPERATURE,
+    TEMP_CELSIUS,
+    TEMP_FAHRENHEIT,
+    CONF_TEMPERATURE_UNIT,
+    CONF_ENTITIES,
+    CONF_NAME,
+    ATTR_SUPPORTED_FEATURES,
+)
 from homeassistant.core import State, callback
 from homeassistant.helpers.event import async_track_state_change
 from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = 'Climate Group'
+DEFAULT_NAME = "Climate Group"
 
-CONF_EXCLUDE = 'exclude'
+CONF_EXCLUDE = "exclude"
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
-    vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
-    vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
-    vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
-        cv.ensure_list,
-        [vol.In([
-            PRESET_ACTIVITY,
-            PRESET_AWAY,
-            PRESET_BOOST,
-            PRESET_COMFORT,
-            PRESET_ECO,
-            PRESET_HOME,
-            PRESET_SLEEP
-        ])
-    ])
-})
+PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+    {
+        vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+        vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
+        vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
+        vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
+            cv.ensure_list,
+            [
+                vol.In(
+                    [
+                        PRESET_ACTIVITY,
+                        PRESET_AWAY,
+                        PRESET_BOOST,
+                        PRESET_COMFORT,
+                        PRESET_ECO,
+                        PRESET_HOME,
+                        PRESET_SLEEP,
+                    ]
+                )
+            ],
+        ),
+    }
+)
 
 SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE
 
@@ -60,26 +73,32 @@ HVAC_ACTIONS = [
     CURRENT_HVAC_FAN,
     CURRENT_HVAC_IDLE,
     CURRENT_HVAC_OFF,
-    None
-    ]
+    None,
+]
 
 
-async def async_setup_platform(hass: HomeAssistantType, config: ConfigType,
-                               async_add_entities,
-                               discovery_info=None) -> None:
+async def async_setup_platform(
+    hass: HomeAssistantType, config: ConfigType, async_add_entities, discovery_info=None
+) -> None:
     """Initialize climate.group platform."""
-    async_add_entities([ClimateGroup(
-        config.get(CONF_NAME),
-        config[CONF_ENTITIES],
-        config.get(CONF_EXCLUDE),
-        config.get(CONF_TEMPERATURE_UNIT)
-    )])
+    async_add_entities(
+        [
+            ClimateGroup(
+                config.get(CONF_NAME),
+                config[CONF_ENTITIES],
+                config.get(CONF_EXCLUDE),
+                config.get(CONF_TEMPERATURE_UNIT),
+            )
+        ]
+    )
 
 
 class ClimateGroup(ClimateDevice):
     """Representation of a climate group."""
 
-    def __init__(self, name: str, entity_ids: List[str], excluded: List[str], unit: str) -> None:
+    def __init__(
+        self, name: str, entity_ids: List[str], excluded: List[str], unit: str
+    ) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
         self._entity_ids = entity_ids  # type: List[str]
@@ -103,14 +122,17 @@ class ClimateGroup(ClimateDevice):
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
+
         @callback
-        def async_state_changed_listener(entity_id: str, old_state: State,
-                                         new_state: State):
+        def async_state_changed_listener(
+            entity_id: str, old_state: State, new_state: State
+        ):
             """Handle child updates."""
             self.async_schedule_update_ha_state(True)
 
         self._async_unsub_state_changed = async_track_state_change(
-            self.hass, self._entity_ids, async_state_changed_listener)
+            self.hass, self._entity_ids, async_state_changed_listener
+        )
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
@@ -184,16 +206,17 @@ class ClimateGroup(ClimateDevice):
             temperature = kwargs.get(ATTR_TEMPERATURE)
             data[ATTR_TEMPERATURE] = temperature
             await self.hass.services.async_call(
-                climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True)
+                climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True
+            )
 
     async def async_set_operation_mode(self, operation_mode):
         """Forward the turn_on command to all climate in the climate group. LEGACY CALL.
         This will be used only if the hass version is old."""
-        data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_HVAC_MODE: operation_mode}
+        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True
+        )
 
     @property
     def preset_mode(self):
@@ -207,11 +230,11 @@ class ClimateGroup(ClimateDevice):
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Forward the turn_on command to all climate in the climate group."""
-        data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_HVAC_MODE: hvac_mode}
+        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_HVAC_MODE: hvac_mode}
 
         await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True)
+            climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True
+        )
 
     async def async_update(self):
         """Query all members and determine the climate group state."""
@@ -219,9 +242,12 @@ class ClimateGroup(ClimateDevice):
         states = list(filter(None, raw_states))
 
         # if nothing is in excluded everything will be in 'filtered states'
-        filtered_states = list(filter(
-            lambda x: x.attributes.get('preset_mode', None) not in self._excluded, states
-        ))
+        filtered_states = list(
+            filter(
+                lambda x: x.attributes.get("preset_mode", None) not in self._excluded,
+                states,
+            )
+        )
 
         if not filtered_states:  # everything is being filtered, so show everything
             filtered_states = states
@@ -239,7 +265,9 @@ class ClimateGroup(ClimateDevice):
                 self._mode = hvac_mode
                 break
 
-        all_actions = [state.attributes.get(ATTR_HVAC_ACTION, None) for state in filtered_states]
+        all_actions = [
+            state.attributes.get(ATTR_HVAC_ACTION, None) for state in filtered_states
+        ]
         for hvac_action in HVAC_ACTIONS:
             # if any thermostat is in the given action return it
             if any([action == hvac_action for action in all_actions]):
@@ -247,22 +275,28 @@ class ClimateGroup(ClimateDevice):
                 break
 
         # get the most common state of non-filtered devices
-        all_presets = [state.attributes.get(ATTR_PRESET_MODE, None) for state in filtered_states]
-        # Report the most common preset_mode.
-        self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+        all_presets = [
+            state.attributes.get(ATTR_PRESET_MODE, None) for state in filtered_states
+        ]
+        if all_presets:
+            # Report the most common preset_mode.
+            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
 
         self._target_temp = _reduce_attribute(filtered_states, ATTR_TEMPERATURE)
-        self._current_temp = _reduce_attribute(filtered_states, ATTR_CURRENT_TEMPERATURE)
+        self._current_temp = _reduce_attribute(
+            filtered_states, ATTR_CURRENT_TEMPERATURE
+        )
 
-        _LOGGER.debug(f"Target temp: {self._target_temp}; Current temp: {self._current_temp}")
+        _LOGGER.debug(
+            f"Target temp: {self._target_temp}; Current temp: {self._current_temp}"
+        )
 
         self._min_temp = _reduce_attribute(states, ATTR_MIN_TEMP, reduce=max)
         self._max_temp = _reduce_attribute(states, ATTR_MAX_TEMP, reduce=min)
 
         # Supported HVAC modes
         self._mode_list = None
-        all_mode_lists = list(
-            _find_state_attributes(states, ATTR_HVAC_MODES))
+        all_mode_lists = list(_find_state_attributes(states, ATTR_HVAC_MODES))
         if all_mode_lists:
             # Merge all effects from all effect_lists with a union merge.
             self._mode_list = list(set().union(*all_mode_lists))
@@ -281,19 +315,17 @@ class ClimateGroup(ClimateDevice):
             self._preset_modes = set(presets)
         else:
             self._preset_modes = None
-            
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Forward the preset_mode to all climate in the climate group."""
-        data = {ATTR_ENTITY_ID: self._entity_ids,
-                ATTR_PRESET_MODE: preset_mode}
+        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_PRESET_MODE: preset_mode}
 
         await self.hass.services.async_call(
-            climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True)
+            climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True
+        )
 
 
-def _find_state_attributes(states: List[State],
-                           key: str) -> Iterator[Any]:
+def _find_state_attributes(states: List[State], key: str) -> Iterator[Any]:
     """Find attributes with matching key from states."""
     for state in states:
         value = state.attributes.get(key)
@@ -306,10 +338,12 @@ def _mean(*args):
     return sum(args) / len(args)
 
 
-def _reduce_attribute(states: List[State],
-                      key: str,
-                      default: Optional[Any] = None,
-                      reduce: Callable[..., Any] = _mean) -> Any:
+def _reduce_attribute(
+    states: List[State],
+    key: str,
+    default: Optional[Any] = None,
+    reduce: Callable[..., Any] = _mean,
+) -> Any:
     """Find the first attribute matching key from states.
     If none are found, return default.
     """
@@ -322,4 +356,3 @@ def _reduce_attribute(states: List[State],
         return attrs[0]
 
     return reduce(*attrs)
-
