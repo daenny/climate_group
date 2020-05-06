@@ -244,7 +244,8 @@ class ClimateGroup(ClimateDevice):
         # if nothing is in excluded everything will be in 'filtered states'
         filtered_states = list(
             filter(
-                lambda x: x.attributes.get("preset_mode", None) not in self._excluded,
+                lambda x: x.attributes.get(ATTR_PRESET_MODE, None)
+                not in self._excluded,
                 states,
             )
         )
@@ -257,9 +258,9 @@ class ClimateGroup(ClimateDevice):
 
         all_modes = [x.state for x in filtered_states]
         # return the Mode (what the thermostat is set to do) in priority order (heat, cool, ...)
-        self._mode = HVAC_MODE_OFF
+        self._mode = None
         # iterate through all hvac modes (skip first, as its off)
-        for hvac_mode in HVAC_MODES[1:]:
+        for hvac_mode in HVAC_MODES[1:] + [HVAC_MODE_OFF]:
             # if any thermostat is in the given mode return it
             if any([mode == hvac_mode for mode in all_modes]):
                 self._mode = hvac_mode
@@ -278,6 +279,7 @@ class ClimateGroup(ClimateDevice):
         all_presets = [
             state.attributes.get(ATTR_PRESET_MODE, None) for state in filtered_states
         ]
+        self._preset = None
         if all_presets:
             # Report the most common preset_mode.
             self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
@@ -307,14 +309,14 @@ class ClimateGroup(ClimateDevice):
             # we find.
             self._supported_features |= support
 
+        self._preset_modes = None
         presets = []
         for preset in _find_state_attributes(states, ATTR_PRESET_MODES):
             presets.extend(preset)
 
         if len(presets):
             self._preset_modes = set(presets)
-        else:
-            self._preset_modes = None
+        _LOGGER.debug("State update complete")
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Forward the preset_mode to all climate in the climate group."""
