@@ -61,8 +61,10 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
         ),
     }
 )
-#edit the supported_flags
-SUPPORT_FLAGS = SUPPORT_TARGET_TEMPERATURE, SUPPORT_TARGET_TEMPERATURE_RANGE
+# edit the supported_flags
+SUPPORT_FLAGS = (
+    SUPPORT_TARGET_TEMPERATURE | SUPPORT_TARGET_TEMPERATURE_RANGE | SUPPORT_PRESET_MODE
+)
 
 
 # HVAC Action priority
@@ -110,7 +112,7 @@ class ClimateGroup(ClimateDevice):
         self._max_temp = 0
         self._current_temp = 0
         self._target_temp = 0
-        #added the temp_low and temp_high
+        # added the temp_low and temp_high
         self._target_temp_high = None
         self._target_temp_low = None
         self._mode = None
@@ -188,8 +190,8 @@ class ClimateGroup(ClimateDevice):
     @property
     def target_temperature(self):
         return self._target_temp
-    
-    #added the target_temperature_low and target_temperature_high
+
+    # added the target_temperature_low and target_temperature_high
     @property
     def target_temperature_low(self):
         return self._target_temp_low
@@ -214,8 +216,12 @@ class ClimateGroup(ClimateDevice):
         if ATTR_HVAC_MODE in kwargs:
             hvac_mode = kwargs.get(ATTR_HVAC_MODE)
             await self.async_set_hvac_mode(hvac_mode)
-        #start add
-        elif ATTR_TEMPERATURE in kwargs or ATTR_TARGET_TEMP_LOW in kwargs or ATTR_TARGET_TEMP_HIGH in kwargs:
+        # start add
+        elif (
+            ATTR_TEMPERATURE in kwargs
+            or ATTR_TARGET_TEMP_LOW in kwargs
+            or ATTR_TARGET_TEMP_HIGH in kwargs
+        ):
             if ATTR_TEMPERATURE in kwargs:
                 temperature = kwargs.get(ATTR_TEMPERATURE)
                 data[ATTR_TEMPERATURE] = temperature
@@ -224,7 +230,7 @@ class ClimateGroup(ClimateDevice):
                 temperature_high = kwargs.get(ATTR_TARGET_TEMP_HIGH)
                 data[climate.ATTR_TARGET_TEMP_LOW] = temperature_low
                 data[climate.ATTR_TARGET_TEMP_HIGH] = temperature_high
-        #end add
+            # end add
             await self.hass.services.async_call(
                 climate.DOMAIN, climate.SERVICE_SET_TEMPERATURE, data, blocking=True
             )
@@ -305,20 +311,21 @@ class ClimateGroup(ClimateDevice):
             self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
 
         self._target_temp = _reduce_attribute(filtered_states, ATTR_TEMPERATURE)
-        
-        #start add
+
+        # start add
         self._target_temp_low = _reduce_attribute(filtered_states, ATTR_TARGET_TEMP_LOW)
-        self._target_temp_high = _reduce_attribute(filtered_states, ATTR_TARGET_TEMP_HIGH)
-        #end add
-        
+        self._target_temp_high = _reduce_attribute(
+            filtered_states, ATTR_TARGET_TEMP_HIGH
+        )
+        # end add
+
         self._current_temp = _reduce_attribute(
             filtered_states, ATTR_CURRENT_TEMPERATURE
         )
 
         _LOGGER.debug(
-            f"Target temp: {self._target_temp}; Target temp low: {self._target_temp_low}; Target temp high: {self._target_temp_high}; Current temp: {self._current_temp}"   
+            f"Target temp: {self._target_temp}; Target temp low: {self._target_temp_low}; Target temp high: {self._target_temp_high}; Current temp: {self._current_temp}"
         )
-
         self._min_temp = _reduce_attribute(states, ATTR_MIN_TEMP, reduce=max)
         self._max_temp = _reduce_attribute(states, ATTR_MAX_TEMP, reduce=min)
 
@@ -334,6 +341,9 @@ class ClimateGroup(ClimateDevice):
             # Merge supported features by emulating support for every feature
             # we find.
             self._supported_features |= support
+        # Bitwise-and the supported features with the Grouped climate's features
+        # so that we don't break in the future when a new feature is added.
+        self._supported_features &= SUPPORT_FLAGS
 
         self._preset_modes = None
         presets = []
@@ -342,12 +352,14 @@ class ClimateGroup(ClimateDevice):
 
         if len(presets):
             self._preset_modes = set(presets)
-        _LOGGER.debug("State update complete")
+        _LOGGER.debug(
+            f"State update complete. Supported: {self._supported_features}, mode: {self._mode}"
+        )
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Forward the preset_mode to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_PRESET_MODE: preset_mode}
-        
+
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True
         )
