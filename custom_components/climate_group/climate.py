@@ -189,14 +189,18 @@ class ClimateGroup(ClimateEntity):
             command[ATTR_TARGET_TEMP_HIGH] = new_state.attributes.get(
                 ATTR_TARGET_TEMP_HIGH
             )
+
         await self.async_set_temperature(command)
+        
+
+        if old_state.state != new_state.state:
+            await self.async_set_hvac_mode({HVAC_MODES: new_state.state}})
+
 
         if old_state.attributes.get(ATTR_PRESET_MODES) != new_state.attributes.get(
             ATTR_PRESET_MODES
         ):
-            command[ATTR_TEMPERATURE] = new_state.attributes.get(ATTR_TEMPERATURE)
-
-            await self.async_set_preset_mode(command)
+            await self.async_set_preset_mode({ATTR_PRESET_MODES: new_state.attributes.get(ATTR_TEMPERATURE)}})
 
     @property
     def name(self) -> str:
