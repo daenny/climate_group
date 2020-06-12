@@ -16,7 +16,7 @@ import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components import climate
-from homeassistant.components.climate import ClimateDevice, PLATFORM_SCHEMA
+from homeassistant.components.climate import ClimateEntity, PLATFORM_SCHEMA
 from homeassistant.components.climate.const import *
 from homeassistant.const import (
     ATTR_ENTITY_ID,
@@ -95,7 +95,7 @@ async def async_setup_platform(
     )
 
 
-class ClimateGroup(ClimateDevice):
+class ClimateGroup(ClimateEntity):
     """Representation of a climate group."""
 
     def __init__(
