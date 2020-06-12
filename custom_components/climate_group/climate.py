@@ -27,6 +27,8 @@ from homeassistant.const import (
     CONF_ENTITIES,
     CONF_NAME,
     ATTR_SUPPORTED_FEATURES,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import State, callback
 from homeassistant.helpers.event import async_track_state_change
@@ -37,11 +39,16 @@ _LOGGER = logging.getLogger(__name__)
 DEFAULT_NAME = "Climate Group"
 
 CONF_EXCLUDE = "exclude"
+CONF_MASTER_DEVICE = "master_device"
+
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
+        vol.Optional(CONF_MASTER_DEVICE, default=None): cv.entity_domain(
+            climate.DOMAIN
+        ),
         vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
         vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
             cv.ensure_list,
@@ -90,6 +97,7 @@ async def async_setup_platform(
                 config[CONF_ENTITIES],
                 config.get(CONF_EXCLUDE),
                 config.get(CONF_TEMPERATURE_UNIT),
+                config.get(CONF_MASTER_DEVICE),
             )
         ]
     )
@@ -99,7 +107,12 @@ class ClimateGroup(ClimateEntity):
     """Representation of a climate group."""
 
     def __init__(
-        self, name: str, entity_ids: List[str], excluded: List[str], unit: str
+        self,
+        name: str,
+        entity_ids: List[str],
+        excluded: List[str],
+        unit: str,
+        master_device: Optional[str] = None,
     ) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
@@ -124,6 +137,12 @@ class ClimateGroup(ClimateEntity):
         self._preset_modes = None
         self._preset = None
         self._excluded = excluded
+        self._master_device = master_device
+        if self._master_device:
+            # Add listener
+            async_track_state_change(
+                self.hass, self._master_device, self._async_master_changed
+            )
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -145,6 +164,39 @@ class ClimateGroup(ClimateEntity):
         if self._async_unsub_state_changed is not None:
             self._async_unsub_state_changed()
             self._async_unsub_state_changed = None
+
+    async def _async_master_changed(self, entity_id, old_state, new_state):
+        """Handle temperature changes from master device."""
+        if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+
+        command = {}
+        if old_state.attributes.get(ATTR_TEMPERATURE) != new_state.attributes.get(
+            ATTR_TEMPERATURE
+        ):
+            command[ATTR_TEMPERATURE] = new_state.attributes.get(ATTR_TEMPERATURE)
+
+        if old_state.attributes.get(ATTR_TARGET_TEMP_LOW) != new_state.attributes.get(
+            ATTR_TARGET_TEMP_LOW
+        ) or old_state.attributes.get(
+            ATTR_TARGET_TEMP_HIGH
+        ) != new_state.attributes.get(
+            ATTR_TARGET_TEMP_HIGH
+        ):
+            command[ATTR_TARGET_TEMP_LOW] = new_state.attributes.get(
+                ATTR_TARGET_TEMP_LOW
+            )
+            command[ATTR_TARGET_TEMP_HIGH] = new_state.attributes.get(
+                ATTR_TARGET_TEMP_HIGH
+            )
+        await self.async_set_temperature(command)
+
+        if old_state.attributes.get(ATTR_PRESET_MODES) != new_state.attributes.get(
+            ATTR_PRESET_MODES
+        ):
+            command[ATTR_TEMPERATURE] = new_state.attributes.get(ATTR_TEMPERATURE)
+
+            await self.async_set_preset_mode(command)
 
     @property
     def name(self) -> str:
@@ -267,20 +319,25 @@ class ClimateGroup(ClimateEntity):
         raw_states = [self.hass.states.get(x) for x in self._entity_ids]
         states = list(filter(None, raw_states))
 
-        # if nothing is in excluded everything will be in 'filtered states'
-        filtered_states = list(
-            filter(
-                lambda x: x.attributes.get(ATTR_PRESET_MODE, None)
-                not in self._excluded,
-                states,
+        if self._master_device is not None:
+            # if we have a master device only use that one
+            filtered_states = [self.hass.states.get(self._master_device)]
+        else:
+
+            # if nothing is in excluded everything will be in 'filtered states'
+            filtered_states = list(
+                filter(
+                    lambda x: x.attributes.get(ATTR_PRESET_MODE, None)
+                    not in self._excluded,
+                    states,
+                )
             )
-        )
 
-        if not filtered_states:  # everything is being filtered, so show everything
-            filtered_states = states
+            if not filtered_states:  # everything is being filtered, so show everything
+                filtered_states = states
 
-        _LOGGER.debug(f"Excluded by config: {self._excluded}")
-        _LOGGER.debug(f"Resulting filtered states: {filtered_states}")
+            _LOGGER.debug(f"Excluded by config: {self._excluded}")
+            _LOGGER.debug(f"Resulting filtered states: {filtered_states}")
 
         all_modes = [x.state for x in filtered_states]
         # return the Mode (what the thermostat is set to do) in priority order (heat, cool, ...)
