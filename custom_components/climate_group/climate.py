@@ -210,6 +210,11 @@ class ClimateGroup(ClimateEntity):
         """No polling needed for a climate group."""
         return False
 
+    @property
+    def device_state_attributes(self):
+        """Return the state attributes for the climate group."""
+        return {ATTR_ENTITY_ID: self._entity_ids}
+
     async def async_set_temperature(self, **kwargs):
         """Forward the turn_on command to all climate in the climate group."""
         data = {ATTR_ENTITY_ID: self._entity_ids}
