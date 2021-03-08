@@ -1,6 +1,7 @@
 {
   "domain": "climate_group",
   "name": "Climate Group",
+  "version": "0.4.2",
   "documentation": "https://github.com/daenny/climate_group",
   "dependencies": [],
   "codeowners": ["@daenny"],
