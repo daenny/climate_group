@@ -63,7 +63,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
 )
 # edit the supported_flags
 SUPPORT_FLAGS = (
-    SUPPORT_TARGET_TEMPERATURE | SUPPORT_TARGET_TEMPERATURE_RANGE | SUPPORT_PRESET_MODE
+    SUPPORT_TARGET_TEMPERATURE | SUPPORT_TARGET_TEMPERATURE_RANGE | SUPPORT_PRESET_MODE | SUPPORT_SWING_MODE
 )
 
 
@@ -121,6 +121,8 @@ class ClimateGroup(ClimateEntity):
         self._available = True  # type: bool
         self._supported_features = 0  # type: int
         self._async_unsub_state_changed = None
+        self._swing_modes = None
+        self._swing_mode = None
         self._preset_modes = None
         self._preset = None
         self._excluded = excluded
@@ -248,6 +250,16 @@ class ClimateGroup(ClimateEntity):
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True
         )
+    
+    @property
+    def swing_mode(self):
+        """Return the current swing mode."""
+        return self._swing_mode
+
+    @property
+    def swing_modes(self):
+        """Return a list of available swing modes."""
+        return self._swing_modes
 
     @property
     def preset_mode(self):
@@ -258,6 +270,7 @@ class ClimateGroup(ClimateEntity):
     def preset_modes(self):
         """Return a list of available preset modes."""
         return self._preset_modes
+
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Forward the turn_on command to all climate in the climate group."""
@@ -307,6 +320,15 @@ class ClimateGroup(ClimateEntity):
                 break
 
         # get the most common state of non-filtered devices
+        all_swing_modes = [
+            state.attributes.get(ATTR_SWING_MODE, None) for state in filtered_states
+        ]
+        self._swing_mode = None
+        if all_swing_modes:
+            # Report the most common swing_mode.
+            self._swing_mode = Counter(itertools.chain(all_swing_modes)).most_common(1)[0][0]
+
+        # get the most common state of non-filtered devices
         all_presets = [
             state.attributes.get(ATTR_PRESET_MODE, None) for state in filtered_states
         ]
@@ -350,6 +372,15 @@ class ClimateGroup(ClimateEntity):
         # so that we don't break in the future when a new feature is added.
         self._supported_features &= SUPPORT_FLAGS
 
+        self._swing_modes = None
+        swing_modes = []
+        for swing_mode in _find_state_attributes(states, ATTR_SWING_MODES):
+            swing_modes.extend(swing_mode)
+
+        if len(swing_modes):
+            self._swing_modes = set(swing_modes)
+
+
         self._preset_modes = None
         presets = []
         for preset in _find_state_attributes(states, ATTR_PRESET_MODES):
@@ -357,8 +388,17 @@ class ClimateGroup(ClimateEntity):
 
         if len(presets):
             self._preset_modes = set(presets)
+            
         _LOGGER.debug(
             f"State update complete. Supported: {self._supported_features}, mode: {self._mode}"
+        )
+
+    async def async_set_swing_mode(self, swing_mode: str):
+        """Forward the swing_mode to all climate in the climate group."""
+        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_SWING_MODE: swing_mode}
+
+        await self.hass.services.async_call(
+            climate.DOMAIN, climate.SERVICE_SET_SWING_MODE, data, blocking=True
         )
 
     async def async_set_preset_mode(self, preset_mode: str):
@@ -368,7 +408,7 @@ class ClimateGroup(ClimateEntity):
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True
         )
-
+        
 
 def _find_state_attributes(states: List[State], key: str) -> Iterator[Any]:
     """Find attributes with matching key from states."""
