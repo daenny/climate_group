@@ -245,12 +245,13 @@ class ClimateGroup(ClimateEntity):
     async def async_set_operation_mode(self, operation_mode):
         """Forward the turn_on command to all climate in the climate group. LEGACY CALL.
         This will be used only if the hass version is old."""
-        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_HVAC_MODE: operation_mode}
+        data = {ATTR_ENTITY_ID: self._entity_ids,
+                ATTR_HVAC_MODE: operation_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True
         )
-    
+
     @property
     def swing_mode(self):
         """Return the current swing mode."""
@@ -270,7 +271,6 @@ class ClimateGroup(ClimateEntity):
     def preset_modes(self):
         """Return a list of available preset modes."""
         return self._preset_modes
-
 
     async def async_set_hvac_mode(self, hvac_mode):
         """Forward the turn_on command to all climate in the climate group."""
@@ -326,7 +326,8 @@ class ClimateGroup(ClimateEntity):
         self._swing_mode = None
         if all_swing_modes:
             # Report the most common swing_mode.
-            self._swing_mode = Counter(itertools.chain(all_swing_modes)).most_common(1)[0][0]
+            self._swing_mode = Counter(itertools.chain(
+                all_swing_modes)).most_common(1)[0][0]
 
         # get the most common state of non-filtered devices
         all_presets = [
@@ -335,12 +336,15 @@ class ClimateGroup(ClimateEntity):
         self._preset = None
         if all_presets:
             # Report the most common preset_mode.
-            self._preset = Counter(itertools.chain(all_presets)).most_common(1)[0][0]
+            self._preset = Counter(itertools.chain(
+                all_presets)).most_common(1)[0][0]
 
-        self._target_temp = _reduce_attribute(filtered_states, ATTR_TEMPERATURE)
+        self._target_temp = _reduce_attribute(
+            filtered_states, ATTR_TEMPERATURE)
 
         # start add
-        self._target_temp_low = _reduce_attribute(filtered_states, ATTR_TARGET_TEMP_LOW)
+        self._target_temp_low = _reduce_attribute(
+            filtered_states, ATTR_TARGET_TEMP_LOW)
         self._target_temp_high = _reduce_attribute(
             filtered_states, ATTR_TARGET_TEMP_HIGH
         )
@@ -380,7 +384,6 @@ class ClimateGroup(ClimateEntity):
         if len(swing_modes):
             self._swing_modes = set(swing_modes)
 
-
         self._preset_modes = None
         presets = []
         for preset in _find_state_attributes(states, ATTR_PRESET_MODES):
@@ -388,7 +391,7 @@ class ClimateGroup(ClimateEntity):
 
         if len(presets):
             self._preset_modes = set(presets)
-            
+
         _LOGGER.debug(
             f"State update complete. Supported: {self._supported_features}, mode: {self._mode}"
         )
@@ -403,12 +406,13 @@ class ClimateGroup(ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str):
         """Forward the preset_mode to all climate in the climate group."""
-        data = {ATTR_ENTITY_ID: self._entity_ids, ATTR_PRESET_MODE: preset_mode}
+        data = {ATTR_ENTITY_ID: self._entity_ids,
+                ATTR_PRESET_MODE: preset_mode}
 
         await self.hass.services.async_call(
             climate.DOMAIN, climate.SERVICE_SET_PRESET_MODE, data, blocking=True
         )
-        
+
 
 def _find_state_attributes(states: List[State], key: str) -> Iterator[Any]:
     """Find attributes with matching key from states."""
