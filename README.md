@@ -33,7 +33,7 @@ climate:
     - climate.clima3
     - climate.heater
     - climate.termostate
-  external_sensor: sensor.temperaturesensor1 # Optional - defaults to not being used, enter entityID of the external sensor
+    external_sensor: sensor.temperaturesensor1 # Optional - defaults to not being used, enter entityID of the external sensor
 ```
 
 (use the entities you want to have in your climate_group)
