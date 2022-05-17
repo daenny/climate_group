@@ -47,8 +47,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
-        #vol.Optional(CONF_EXT_SENSOR, default=None): cv.entity_domain(sensor.DOMAIN), #cv.entity_id,
-        vol.Optional(CONF_EXT_SENSOR, default=''): cv.string, #cv.entity_id,
+        vol.Optional(CONF_EXT_SENSOR, default=''): cv.string, # would rather use cv.entity_id or cv.entity_domain(sensor.DOMAIN) but HA configuration checker does not allow "entity" checks to be None, which breaks the "optional" part
         vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
         vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
             cv.ensure_list,
@@ -107,7 +106,6 @@ class ClimateGroup(ClimateEntity):
     """Representation of a climate group."""
 
     def __init__(
-        #self, name: str, entity_ids: List[str], excluded: List[str], unit: str, sensor_entity_id: str
         self,
         name: str,
         entity_ids: List[str],
@@ -165,7 +163,6 @@ class ClimateGroup(ClimateEntity):
             async_track_state_change(self.hass, self._sensor_entity_id, 
                                      self._async_temp_sensor_changed)
             sensor_state = self.hass.states.get(self._sensor_entity_id)
-            #if sensor_state and sensor_state.state != "STATE_UNKNOWN":
             if sensor_state is not None and sensor_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
                 self._async_update_temp(sensor_state)
 
