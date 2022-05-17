@@ -4,7 +4,9 @@ Home Assistant Climate Group
 
 Groups multiple climate devices to a single entity. Useful if you have for instance multiple radiator thermostats in a room and want to control them all together.
 Supports reading room temperature from external sensor or defaults to displaying the average current temperature reported by the configured climate devices.
+
 Note: The value from the external temperature sensor is not reported back to the climate devices. It is only used to display the current temperature in the Climate Group entity card.
+
 Inspired/copied from light_group component (https://github.com/home-assistant/home-assistant/blob/dev/homeassistant/components/group/light.py)
 
 ## How to install:
