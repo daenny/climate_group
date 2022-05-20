@@ -16,6 +16,7 @@ import voluptuous as vol
 
 import homeassistant.helpers.config_validation as cv
 from homeassistant.components import climate
+from homeassistant.components import sensor
 from homeassistant.components.climate import ClimateEntity, PLATFORM_SCHEMA
 from homeassistant.components.climate.const import *
 from homeassistant.const import (
@@ -27,6 +28,8 @@ from homeassistant.const import (
     CONF_ENTITIES,
     CONF_NAME,
     ATTR_SUPPORTED_FEATURES,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
 )
 from homeassistant.core import State, callback
 from homeassistant.helpers.event import async_track_state_change
@@ -34,14 +37,17 @@ from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_NAME = "Climate Group"
+DEPENDENCIES = ['sensor']
 
+DEFAULT_NAME = "Climate Group"
+CONF_EXT_SENSOR = "external_sensor"
 CONF_EXCLUDE = "exclude"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
         vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
+        vol.Optional(CONF_EXT_SENSOR, default=''): cv.string, # would rather use cv.entity_id or cv.entity_domain(sensor.DOMAIN) but HA configuration checker does not allow "entity" checks to be None, which breaks the "optional" part
         vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
         vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
             cv.ensure_list,
@@ -90,6 +96,7 @@ async def async_setup_platform(
                 config[CONF_ENTITIES],
                 config.get(CONF_EXCLUDE),
                 config.get(CONF_TEMPERATURE_UNIT),
+                config.get(CONF_EXT_SENSOR)
             )
         ]
     )
@@ -99,11 +106,17 @@ class ClimateGroup(ClimateEntity):
     """Representation of a climate group."""
 
     def __init__(
-        self, name: str, entity_ids: List[str], excluded: List[str], unit: str
+        self,
+        name: str,
+        entity_ids: List[str],
+        excluded: List[str],
+        unit: str,
+        external_sensor: Optional[str] = None,
     ) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
         self._entity_ids = entity_ids  # type: List[str]
+        self._sensor_entity_id = external_sensor
         if "c" in unit.lower():
             self._unit = TEMP_CELSIUS
         else:
@@ -128,6 +141,7 @@ class ClimateGroup(ClimateEntity):
         self._preset_modes = None
         self._preset = None
         self._excluded = excluded
+    
 
     async def async_added_to_hass(self) -> None:
         """Register callbacks."""
@@ -142,6 +156,16 @@ class ClimateGroup(ClimateEntity):
         self._async_unsub_state_changed = async_track_state_change(
             self.hass, self._entity_ids, async_state_changed_listener
         )
+
+        # Track changes of the temperature sensor - Only if external sensor is used
+        if self._sensor_entity_id:
+            # Add listener
+            async_track_state_change(self.hass, self._sensor_entity_id, 
+                                     self._async_temp_sensor_changed)
+            sensor_state = self.hass.states.get(self._sensor_entity_id)
+            if sensor_state is not None and sensor_state.state not in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                self._async_update_temp(sensor_state)
+
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
@@ -292,6 +316,24 @@ class ClimateGroup(ClimateEntity):
             climate.DOMAIN, climate.SERVICE_SET_HVAC_MODE, data, blocking=True
         )
 
+    # Update climate group current temperature - Only used if external temperature sensor is configured
+    async def _async_temp_sensor_changed(self, entity_id, old_state, new_state):
+        """Handle temperature sensor changes. External sensor???"""
+        if new_state is None or new_state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+            return
+        
+        self._async_update_temp(new_state)
+        await self.async_update_ha_state()
+
+    @callback
+    def _async_update_temp(self, state):
+        """Update thermostat with latest state from temperature sensor."""
+        try:
+            if state.state != "STATE_UNKNOWN":
+                self._current_temp = float(state.state)
+        except ValueError as ex:
+            _LOGGER.error("Unable to update from temperature sensor: %s", ex)
+
     async def async_update(self):
         """Query all members and determine the climate group state."""
         raw_states = [self.hass.states.get(x) for x in self._entity_ids]
@@ -370,9 +412,11 @@ class ClimateGroup(ClimateEntity):
         )
         # end add
 
-        self._current_temp = _reduce_attribute(
-            filtered_states, ATTR_CURRENT_TEMPERATURE
-        )
+        # Only if external temperature sensor is NOT used
+        if not self._sensor_entity_id:
+            self._current_temp = _reduce_attribute(
+                filtered_states, ATTR_CURRENT_TEMPERATURE
+            )
 
         _LOGGER.debug(
             f"Target temp: {self._target_temp}; Target temp low: {self._target_temp_low}; Target temp high: {self._target_temp_high}; Current temp: {self._current_temp}"
