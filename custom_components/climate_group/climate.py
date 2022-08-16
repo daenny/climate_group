@@ -26,6 +26,7 @@ from homeassistant.const import (
     CONF_TEMPERATURE_UNIT,
     CONF_ENTITIES,
     CONF_NAME,
+    CONF_UNIQUE_ID,
     ATTR_SUPPORTED_FEATURES,
 )
 from homeassistant.core import State, callback
@@ -35,12 +36,14 @@ from homeassistant.helpers.typing import HomeAssistantType, ConfigType
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_NAME = "Climate Group"
+DEFAULT_UNIQUE_ID = "climate_group.1660659050"
 
 CONF_EXCLUDE = "exclude"
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
         vol.Optional(CONF_NAME, default=DEFAULT_NAME): cv.string,
+        vol.Optional(CONF_UNIQUE_ID, default=DEFAULT_UNIQUE_ID): cv.string,
         vol.Optional(CONF_TEMPERATURE_UNIT, default=TEMP_CELSIUS): cv.string,
         vol.Required(CONF_ENTITIES): cv.entities_domain(climate.DOMAIN),
         vol.Optional(CONF_EXCLUDE, default=[]): vol.All(
@@ -87,6 +90,7 @@ async def async_setup_platform(
         [
             ClimateGroup(
                 config.get(CONF_NAME),
+                config[CONF_UNIQUE_ID],
                 config[CONF_ENTITIES],
                 config.get(CONF_EXCLUDE),
                 config.get(CONF_TEMPERATURE_UNIT),
@@ -99,10 +103,11 @@ class ClimateGroup(ClimateEntity):
     """Representation of a climate group."""
 
     def __init__(
-        self, name: str, entity_ids: List[str], excluded: List[str], unit: str
+        self, name: str, unique_id: str, entity_ids: List[str], excluded: List[str], unit: str
     ) -> None:
         """Initialize a climate group."""
         self._name = name  # type: str
+        self._unique_id = unique_id
         self._entity_ids = entity_ids  # type: List[str]
         if "c" in unit.lower():
             self._unit = TEMP_CELSIUS
@@ -154,6 +159,11 @@ class ClimateGroup(ClimateEntity):
     def name(self) -> str:
         """Return the name of the entity."""
         return self._name
+
+    @property
+    def unique_id(self) -> str:
+        """Return the unique ID of the entity."""
+        return self._unique_id
 
     @property
     def available(self) -> bool:
