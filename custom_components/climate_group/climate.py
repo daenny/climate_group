@@ -52,8 +52,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from . import GroupEntity
-from .util import (
+from homeassistant.components.group import GroupEntity
+from homeassistnat.components.group.util import (
     find_state_attributes,
     most_frequent_attribute,
     reduce_attribute,
