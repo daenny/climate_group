@@ -1,5 +1,8 @@
 # climate_group
 
+STATUS: [UN-MAINTAINED]. Due to personal reasons I am not using this integration anymore. I do not have the time to actively maintain it. Feel free to fork/take-over. 
+I had made in try to get it merged into home assistant: https://github.com/home-assistant/core/pull/77737 but never got around to finish it. 
+
 Home Assistant Climate Group
 
 Groups multiple climate devices to a single entity. Useful if you have for instance multiple radiator thermostats in a room and want to control them all together.
