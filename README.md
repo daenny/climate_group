@@ -1,3 +1,8 @@
+# THIS REPO IS ARCHIVED, NEW VERSION AVAILABLE!
+
+Please use: https://github.com/bjrnptrsn/climate_group
+
+
 # climate_group
 
 STATUS: [UN-MAINTAINED]. Due to personal reasons I am not using this integration anymore. I do not have the time to actively maintain it. Feel free to fork/take-over. 
